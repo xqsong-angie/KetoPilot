@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 // Simple data model for one entry
 class NutritionEntry {
@@ -6,12 +9,14 @@ class NutritionEntry {
   final double carbs;
   final double protein;
   final double fat;
+  final String? imagePath;
 
   NutritionEntry({
     required this.dateTime,
     required this.carbs,
     required this.protein,
     required this.fat,
+    this.imagePath,
   });
 
   double get totalCalories => carbs * 4 + protein * 4 + fat * 9;
@@ -31,6 +36,7 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
   final TextEditingController _carbsController = TextEditingController();
   final TextEditingController _proteinController = TextEditingController();
   final TextEditingController _fatController = TextEditingController();
+  File? _imageFile;
 
   @override
   void dispose() {
@@ -38,6 +44,46 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
     _proteinController.dispose();
     _fatController.dispose();
     super.dispose();
+  }
+
+  // Unified method to get an image from either camera or gallery
+  Future<void> _getImage(ImageSource source) async {
+    final pickedFile = await ImagePicker().pickImage(source: source);
+    if (pickedFile != null) {
+      setState(() {
+        _imageFile = File(pickedFile.path);
+      });
+    }
+  }
+
+  // Shows a dialog to let the user choose between camera and gallery
+  void _showImageSourceDialog() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Wrap(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.camera_alt),
+            title: const Text('Take a Photo'),
+            onTap: () {
+              Navigator.of(context).pop();
+              _getImage(ImageSource.camera);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library),
+            title: const Text('Choose from Gallery'),
+            onTap: () {
+              Navigator.of(context).pop();
+              _getImage(ImageSource.gallery);
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   void _saveEntry() {
@@ -61,11 +107,12 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
       carbs: carbs,
       protein: protein,
       fat: fat,
+      imagePath: _imageFile?.path,
     );
 
     nutritionEntries.add(entry);
 
-    print('Saved -> Carbs: $carbs, Protein: $protein, Fat: $fat');
+    print('Saved -> Carbs: $carbs, Protein: $protein, Fat: $fat, Image: ${_imageFile?.path}');
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Entry saved! 🎉')),
@@ -74,7 +121,9 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
     _carbsController.clear();
     _proteinController.clear();
     _fatController.clear();
-    setState(() {});
+    setState(() {
+      _imageFile = null;
+    });
   }
 
   @override
@@ -150,6 +199,35 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
                         color: Colors.grey[700],
                       ),
                       textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    GestureDetector(
+                      onTap: _showImageSourceDialog, // Updated onTap to show the dialog
+                      child: Container(
+                        height: 150,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.grey.shade400, width: 1),
+                        ),
+                        child: _imageFile != null
+                            ? ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.file(_imageFile!, fit: BoxFit.cover),
+                        )
+                            : Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.add_a_photo, size: 40, color: Colors.grey[600]),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Add a photo',
+                              style: TextStyle(color: Colors.grey[800]),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 24),
 
@@ -247,8 +325,6 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
   }
 }
 
-// ==================== History Screen ====================
-
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
 
@@ -288,7 +364,7 @@ class HistoryScreen extends StatelessWidget {
     }
 
     final avgAll =
-        entries.isEmpty ? 0 : totalAll / entries.length.toDouble();
+    entries.isEmpty ? 0 : totalAll / entries.length.toDouble();
 
     return Card(
       elevation: 6,
@@ -376,6 +452,18 @@ class HistoryScreen extends StatelessWidget {
                   color: Colors.grey,
                 ),
               ),
+              if (entry.imagePath != null) ...[
+                const SizedBox(height: 16),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.file(
+                    File(entry.imagePath!),
+                    height: 150,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               Text(
                 'Total: ${entry.totalCalories.toStringAsFixed(0)} kcal',
@@ -392,21 +480,21 @@ class HistoryScreen extends StatelessWidget {
                   Chip(
                     label: Text(
                       'Carbs: ${entry.carbs.toStringAsFixed(1)}g '
-                      '(${(percents['carbs']! * 100).toStringAsFixed(0)}%)',
+                          '(${(percents['carbs']! * 100).toStringAsFixed(0)}%)',
                     ),
                     avatar: const Icon(Icons.local_pizza, size: 18),
                   ),
                   Chip(
                     label: Text(
                       'Protein: ${entry.protein.toStringAsFixed(1)}g '
-                      '(${(percents['protein']! * 100).toStringAsFixed(0)}%)',
+                          '(${(percents['protein']! * 100).toStringAsFixed(0)}%)',
                     ),
                     avatar: const Icon(Icons.emoji_food_beverage, size: 18),
                   ),
                   Chip(
                     label: Text(
                       'Fat: ${entry.fat.toStringAsFixed(1)}g '
-                      '(${(percents['fat']! * 100).toStringAsFixed(0)}%)',
+                          '(${(percents['fat']! * 100).toStringAsFixed(0)}%)',
                     ),
                     avatar: const Icon(Icons.icecream, size: 18),
                   ),
@@ -442,126 +530,136 @@ class HistoryScreen extends StatelessWidget {
       ),
       body: entries.isEmpty
           ? const Center(
-              child: Text(
-                'No entries yet.\nAdd something first ✨',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16),
-              ),
-            )
+        child: Text(
+          'No entries yet.\nAdd something first ✨',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 16),
+        ),
+      )
           : ListView.builder(
-              padding: const EdgeInsets.all(16.0),
-              itemCount: entries.length + 1, // +1 for summary card
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return _buildSummaryCard(entries);
-                }
+        padding: const EdgeInsets.all(16.0),
+        itemCount: entries.length + 1, // +1 for summary card
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return _buildSummaryCard(entries);
+          }
 
-                final realIndex = index - 1;
-                final entry = entries[realIndex];
+          final realIndex = index - 1;
+          final entry = entries[realIndex];
 
-                final currentDateKey = DateTime(
-                  entry.dateTime.year,
-                  entry.dateTime.month,
-                  entry.dateTime.day,
-                );
+          final currentDateKey = DateTime(
+            entry.dateTime.year,
+            entry.dateTime.month,
+            entry.dateTime.day,
+          );
 
-                DateTime? previousDateKey;
-                if (realIndex > 0) {
-                  final previous = entries[realIndex - 1];
-                  previousDateKey = DateTime(
-                    previous.dateTime.year,
-                    previous.dateTime.month,
-                    previous.dateTime.day,
-                  );
-                }
+          DateTime? previousDateKey;
+          if (realIndex > 0) {
+            final previous = entries[realIndex - 1];
+            previousDateKey = DateTime(
+              previous.dateTime.year,
+              previous.dateTime.month,
+              previous.dateTime.day,
+            );
+          }
 
-                final showDateHeader =
-                    realIndex == 0 || currentDateKey != previousDateKey;
+          final showDateHeader =
+              realIndex == 0 || currentDateKey != previousDateKey;
 
-                final percents = _macroPercents(entry);
+          final percents = _macroPercents(entry);
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (showDateHeader) ...[
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 8.0,
-                        ),
-                        child: Text(
-                          _formatDate(entry.dateTime),
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (showDateHeader) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 8.0,
+                  ),
+                  child: Text(
+                    _formatDate(entry.dateTime),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+              Card(
+                color: const Color(0xFFF7F5FF),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: ListTile(
+                  onTap: () => _showEntryDetails(context, entry),
+                  leading: entry.imagePath != null
+                      ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8.0),
+                    child: Image.file(
+                      File(entry.imagePath!),
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                      : CircleAvatar(
+                    radius: 24,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          entry.totalCalories
+                              .toStringAsFixed(0),
                           style: const TextStyle(
-                            fontSize: 18,
+                            fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
-                    ],
-                    Card(
-                      color: const Color(0xFFF7F5FF),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: ListTile(
-                        onTap: () => _showEntryDetails(context, entry),
-                        leading: CircleAvatar(
-                          radius: 24,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                entry.totalCalories
-                                    .toStringAsFixed(0),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const Text(
-                                'kcal',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        title: Text(
-                          'Carb ${entry.carbs.toStringAsFixed(1)}g • '
-                          'Prot ${entry.protein.toStringAsFixed(1)}g • '
-                          'Fat ${entry.fat.toStringAsFixed(1)}g',
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Tap for details • '
-                              'C ${(percents['carbs']! * 100).toStringAsFixed(0)}% '
-                              'P ${(percents['protein']! * 100).toStringAsFixed(0)}% '
-                              'F ${(percents['fat']! * 100).toStringAsFixed(0)}%',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                        trailing: Text(
-                          '${entry.dateTime.hour.toString().padLeft(2, '0')}:'
-                          '${entry.dateTime.minute.toString().padLeft(2, '0')}',
-                          style: const TextStyle(
-                            fontSize: 12,
+                        const Text(
+                          'kcal',
+                          style: TextStyle(
+                            fontSize: 10,
                             color: Colors.grey,
                           ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
-                );
-              },
-            ),
+                  ),
+                  title: Text(
+                    'Carb ${entry.carbs.toStringAsFixed(1)}g • '
+                        'Prot ${entry.protein.toStringAsFixed(1)}g • '
+                        'Fat ${entry.fat.toStringAsFixed(1)}g',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Tap for details • '
+                            'C ${(percents['carbs']! * 100).toStringAsFixed(0)}% '
+                            'P ${(percents['protein']! * 100).toStringAsFixed(0)}% '
+                            'F ${(percents['fat']! * 100).toStringAsFixed(0)}%',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                  trailing: Text(
+                    '${entry.dateTime.hour.toString().padLeft(2, '0')}:'
+                        '${entry.dateTime.minute.toString().padLeft(2, '0')}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
