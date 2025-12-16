@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../core/themes/app_theme.dart';
 import '../../../../shared/widgets/app_drawer.dart';
 
@@ -26,6 +29,9 @@ class _DataEntryPageState extends State<DataEntryPage>
   final TextEditingController _bhbController = TextEditingController();
   final TextEditingController _weightController = TextEditingController();
 
+  // State for the food image
+  File? _imageFile;
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +49,48 @@ class _DataEntryPageState extends State<DataEntryPage>
     _weightController.dispose();
     super.dispose();
   }
+
+  // --- Image Picker Logic ---
+
+  Future<void> _getImage(ImageSource source) async {
+    final pickedFile = await ImagePicker().pickImage(source: source, imageQuality: 80);
+    if (pickedFile != null) {
+      setState(() {
+        _imageFile = File(pickedFile.path);
+      });
+    }
+  }
+
+  void _showImageSourceDialog() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Wrap(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.camera_alt),
+            title: const Text('Take a Photo'),
+            onTap: () {
+              Navigator.of(context).pop();
+              _getImage(ImageSource.camera);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library),
+            title: const Text('Choose from Gallery'),
+            onTap: () {
+              Navigator.of(context).pop();
+              _getImage(ImageSource.gallery);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- Build Methods ---
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +124,14 @@ class _DataEntryPageState extends State<DataEntryPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _buildSectionHeader(
+            'Meal Photo',
+            'Visually log your meal',
+            Icons.camera_alt,
+          ),
+          const SizedBox(height: 16),
+          _buildPhotoSection(),
+          const SizedBox(height: 24),
           _buildSectionHeader(
             'Daily Macronutrients',
             'Enter your daily macro totals',
@@ -147,6 +203,46 @@ class _DataEntryPageState extends State<DataEntryPage>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoSection() {
+    return GestureDetector(
+      onTap: _showImageSourceDialog,
+      child: Container(
+        height: 200,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+          image: _imageFile != null
+              ? DecorationImage(
+            image: FileImage(_imageFile!),
+            fit: BoxFit.cover,
+          )
+              : null,
+        ),
+        child: _imageFile == null
+            ? Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.add_a_photo_outlined,
+                color: Colors.grey.shade600,
+                size: 40,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Tap to add a photo',
+                style: TextStyle(color: Colors.grey.shade700),
+              ),
+            ],
+          ),
+        )
+            : null,
       ),
     );
   }
@@ -297,13 +393,13 @@ class _DataEntryPageState extends State<DataEntryPage>
   }
 
   Widget _buildMacroInputCard(
-    String label,
-    String unit,
-    TextEditingController controller,
-    Color color,
-    String target,
-    IconData icon,
-  ) {
+      String label,
+      String unit,
+      TextEditingController controller,
+      Color color,
+      String target,
+      IconData icon,
+      ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -369,13 +465,13 @@ class _DataEntryPageState extends State<DataEntryPage>
   }
 
   Widget _buildBiomarkerInputCard(
-    String label,
-    String unit,
-    TextEditingController controller,
-    Color color,
-    String target,
-    IconData icon,
-  ) {
+      String label,
+      String unit,
+      TextEditingController controller,
+      Color color,
+      String target,
+      IconData icon,
+      ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -481,10 +577,14 @@ class _DataEntryPageState extends State<DataEntryPage>
   }
 
   void _saveData(bool isNutrition) {
-    // TODO: Implement actual data saving logic
+    // TODO: Implement actual data saving logic including the _imageFile.path
     String message = isNutrition
         ? 'Nutrition data saved successfully!'
         : 'Biomarker data saved successfully!';
+
+    if (isNutrition) {
+      print('Image path to save: ${_imageFile?.path}');
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -498,15 +598,7 @@ class _DataEntryPageState extends State<DataEntryPage>
       ),
     );
 
-    if (isNutrition) {
-      _carbsController.clear();
-      _proteinController.clear();
-      _fatController.clear();
-    } else {
-      _glucoseController.clear();
-      _bhbController.clear();
-      _weightController.clear();
-    }
+    _clearData(isNutrition);
   }
 
   void _clearData(bool isNutrition) {
@@ -514,17 +606,13 @@ class _DataEntryPageState extends State<DataEntryPage>
       _carbsController.clear();
       _proteinController.clear();
       _fatController.clear();
+      setState(() {
+        _imageFile = null;
+      });
     } else {
       _glucoseController.clear();
       _bhbController.clear();
       _weightController.clear();
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('All fields cleared'),
-        duration: Duration(seconds: 1),
-      ),
-    );
   }
 }
